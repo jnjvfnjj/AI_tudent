@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="materials-header">
+    <h1>📚 Мои учебные материалы</h1>
+    <button class="btn btn-primary" onclick="showAddForm()">+ Добавить материал</button>
+</div>
+
+<!-- Форма добавления -->
+<div id="add-form" class="add-form" style="display: none;">
+    <h3>Добавить новый материал</h3>
+    <div class="form-group">
+        <input type="text" id="material-title" placeholder="Название материала" class="form-input">
+    </div>
+    <div class="form-group">
+        <select id="material-subject" class="form-select">
+            <option value="">Выберите предмет</option>
+            {% for subject in subjects %}
+            <option value="{{ subject }}">{{ subject }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <select id="material-type" class="form-select">
+            <option value="lecture">Лекция</option>
+            <option value="book">Книга</option>
+            <option value="homework">Домашняя работа</option>
+            <option value="note">Заметка</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <textarea id="material-content" placeholder="Текст, ссылка или описание..." class="form-textarea"></textarea>
+    </div>
+    <button class="btn btn-success" onclick="addMaterial()">Сохранить</button>
+    <button class="btn btn-secondary" onclick="hideAddForm()">Отмена</button>
+</div>
+
+<!-- Список материалов -->
+<div class="materials-list" id="materials-list">
+    <div class="loading">Загрузка материалов...</div>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="profile-container">
+    <h1>👤 Мой профиль</h1>
+    
+    <div class="profile-card">
+        <div class="profile-info">
+            <h3>Информация о пользователе</h3>
+            <div class="info-item">
+                <strong>Имя:</strong> <span id="user-name">Студент</span>
+            </div>
+            <div class="info-item">
+                <strong>Учебное заведение:</strong> <span id="user-school">Не указано</span>
+            </div>
+            <div class="info-item">
+                <strong>Курс/Класс:</strong> <span id="user-course">Не указано</span>
+            </div>
+        </div>
+        
+        <div class="profile-stats">
+            <h3>Статистика</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-number" id="total-materials">0</span>
+                    <span class="stat-label">Всего материалов</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="total-questions">0</span>
+                    <span class="stat-label">Вопросов к ИИ</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="active-days">1</span>
+                    <span class="stat-label">Дней с нами</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <button class="btn btn-secondary" onclick="editProfile()">Редактировать профиль</button>
+</div>
+{% endblock %}

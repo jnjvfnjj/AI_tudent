@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero-section">
+    <h1>🎓 Добро пожаловать в Sucsesful Student!</h1>
+    <p>Твой умный помощник в учебе</p>
+</div>
+
+<div class="features-grid">
+    <div class="feature-card">
+        <h3>📚 Хранилище материалов</h3>
+        <p>Сохраняй лекции, книги и заметки в одном месте</p>
+        <a href="{{ url_for('materials') }}" class="btn">Перейти</a>
+    </div>
+    
+    <div class="feature-card">
+        <h3>🤖 ИИ-Помощник</h3>
+        <p>Объясняет сложные темы простыми словами</p>
+        <a href="{{ url_for('ai_helper') }}" class="btn">Спросить</a>
+    </div>
+    
+    <div class="feature-card">
+        <h3>📊 Организация</h3>
+        <p>Сортируй материалы по предметам и темам</p>
+        <a href="{{ url_for('materials') }}" class="btn">Начать</a>
+    </div>
+</div>
+
+<div class="quick-stats">
+    <h2>Быстрый старт</h2>
+    <div class="stats-grid">
+        <div class="stat">
+            <span class="stat-number" id="materials-count">0</span>
+            <span class="stat-label">материалов сохранено</span>
+        </div>
+        <div class="stat">
+            <span class="stat-number">3</span>
+            <span class="stat-label">предмета доступно</span>
+        </div>
+        <div class="stat">
+            <span class="stat-number">24/7</span>
+            <span class="stat-label">ИИ-помощник</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
