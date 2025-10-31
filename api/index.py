@@ -1,23 +1,17 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify
 import json
 import os
 from datetime import datetime
-import openai
+import requests
 import time
-from openai import OpenAI  # Новый синтаксис
 
 app = Flask(__name__)
 
 # Конфигурация
-app.config['SECRET_KEY'] = 'your-secret-key-here'
+api_key = os.environ.get('DEEPSEEK_API_KEY')
 
 # Простое хранение данных
-DATA_FILE = 'data.json'
-
-from dotenv import load_dotenv
-load_dotenv()
-
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+DATA_FILE = '/tmp/data.json'  # Используем /tmp для Vercel
 
 def init_data():
     if not os.path.exists(DATA_FILE):
@@ -27,11 +21,6 @@ def init_data():
             "subjects": ["Математика", "Физика", "Программирование", "Английский", "История", "Химия"]
         }
         save_data(base_data)
-    else:
-        data = load_data()
-        if "subjects" not in data:
-            data["subjects"] = ["Математика", "Физика", "Программирование", "Английский", "История", "Химия"]
-            save_data(data)
 
 def save_data(data):
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
@@ -114,10 +103,15 @@ class AIHelper:
             time.sleep(self.min_interval - (current_time - self.last_request_time))
         
         try:
-            # Новый синтаксис OpenAI API
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
+            # DeepSeek API вместо OpenAI
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            payload = {
+                "model": "deepseek-chat",
+                "messages": [
                     {
                         "role": "system", 
                         "content": """Ты - умный помощник для студентов и учеников. 
@@ -131,20 +125,24 @@ class AIHelper:
                         "content": f"Пожалуйста, объясни следующее простыми словами, как если бы ты объяснял другу: {question}"
                     }
                 ],
-                max_tokens=600,
-                temperature=0.7,
-                top_p=0.9
+                "temperature": 0.7,
+                "max_tokens": 2000
+            }
+            
+            response = requests.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers=headers,
+                json=payload
             )
             
-            self.last_request_time = time.time()
-            return response.choices[0].message.content.strip()
+            if response.status_code == 200:
+                result = response.json()
+                answer = result['choices'][0]['message']['content']
+                self.last_request_time = time.time()
+                return answer
+            else:
+                return f"Ошибка API: {response.status_code} - {response.text}"
             
-        except openai.AuthenticationError:
-            return "Ошибка: Неверный API ключ. Пожалуйста, проверьте настройки API."
-        except openai.RateLimitError:
-            return "Превышен лимит запросов. Пожалуйста, подождите немного и попробуйте снова."
-        except openai.APIError as e:
-            return f"Ошибка API: {str(e)}"
         except Exception as e:
             return f"Произошла ошибка: {str(e)}"
 
@@ -159,13 +157,14 @@ def ask_ai():
         if not question or len(question.strip()) < 3:
             return jsonify({"answer": "Пожалуйста, задайте более конкретный вопрос."})
         
+        if not api_key:
+            return jsonify({"answer": "API ключ не настроен. Пожалуйста, проверьте настройки."})
+        
         answer = ai_helper.ask_question(question)
         return jsonify({"answer": answer})
         
     except Exception as e:
-        print(f"Общая ошибка: {e}")
-        return jsonify({"answer": "Извините, произошла непредвиденная ошибка. Попробуйте еще раз."})
+        return jsonify({"answer": f"Извините, произошла непредвиденная ошибка: {str(e)}"})
 
-if __name__ == '__main__':
-    init_data()
-    app.run(debug=True, port=5000)
+# Инициализация при импорте
+init_data()
