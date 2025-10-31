@@ -1,23 +1,17 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify
 import json
 import os
 from datetime import datetime
-import openai
+import requests
 import time
-from openai import OpenAI  # Новый синтаксис
 
 app = Flask(__name__)
 
 # Конфигурация
-app.config['SECRET_KEY'] = 'your-secret-key-here'
+api_key = os.environ.get('DEEPSEEK_API_KEY')
 
 # Простое хранение данных
-DATA_FILE = 'data.json'
-
-from dotenv import load_dotenv
-load_dotenv()
-
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+DATA_FILE = 'data.json'  # Изменено для локального использования
 
 def init_data():
     if not os.path.exists(DATA_FILE):
@@ -27,11 +21,6 @@ def init_data():
             "subjects": ["Математика", "Физика", "Программирование", "Английский", "История", "Химия"]
         }
         save_data(base_data)
-    else:
-        data = load_data()
-        if "subjects" not in data:
-            data["subjects"] = ["Математика", "Физика", "Программирование", "Английский", "История", "Химия"]
-            save_data(data)
 
 def save_data(data):
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
@@ -113,11 +102,27 @@ class AIHelper:
         if current_time - self.last_request_time < self.min_interval:
             time.sleep(self.min_interval - (current_time - self.last_request_time))
         
+        # Если API ключ не установлен, возвращаем демо-ответ
+        if not api_key:
+            demo_responses = [
+                f"Отличный вопрос! '{question}' - это очень интересная тема. В обычных условиях я бы объяснил это подробно, но сейчас API ключ не настроен.",
+                f"Вопрос '{question}' действительно важен для понимания. Для получения полного ответа необходимо настроить API ключ DeepSeek.",
+                f"Я бы с радостью объяснил тему '{question}', но сначала нужно настроить аутентификацию с помощью API ключа.",
+                f"По вопросу '{question}' можно дать развернутый ответ. Пожалуйста, настройте API ключ для доступа к полной функциональности AI-помощника."
+            ]
+            import random
+            return random.choice(demo_responses)
+        
         try:
-            # Новый синтаксис OpenAI API
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
+            # DeepSeek API
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            payload = {
+                "model": "deepseek-chat",
+                "messages": [
                     {
                         "role": "system", 
                         "content": """Ты - умный помощник для студентов и учеников. 
@@ -131,84 +136,30 @@ class AIHelper:
                         "content": f"Пожалуйста, объясни следующее простыми словами, как если бы ты объяснял другу: {question}"
                     }
                 ],
-                max_tokens=600,
-                temperature=0.7,
-                top_p=0.9
+                "temperature": 0.7,
+                "max_tokens": 2000
+            }
+            
+            response = requests.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
             )
             
-            self.last_request_time = time.time()
-            return response.choices[0].message.content.strip()
+            if response.status_code == 200:
+                result = response.json()
+                answer = result['choices'][0]['message']['content']
+                self.last_request_time = time.time()
+                return answer
+            else:
+                return f"Ошибка API: {response.status_code}. Пожалуйста, проверьте API ключ и попробуйте снова."
             
-        except openai.AuthenticationError:
-            return "Ошибка: Неверный API ключ. Пожалуйста, проверьте настройки API."
-        except openai.RateLimitError:
-            return "Превышен лимит запросов. Пожалуйста, подождите немного и попробуйте снова."
-        except openai.APIError as e:
-            return f"Ошибка API: {str(e)}"
         except Exception as e:
-            return f"Произошла ошибка: {str(e)}"
+            return f"Произошла ошибка при подключении: {str(e)}"
 
 # Создаем экземпляр помощника
-import requests
-import os
-import time
-
-class DeepSeekHelper:
-    def __init__(self):
-        self.last_request_time = 0
-        self.min_interval = 1
-        self.api_key = os.environ.get('DEEPSEEK_API_KEY')
-        self.base_url = "https://api.deepseek.com/v1/chat/completions"
-    
-    def ask_question(self, question):
-        # Защита от частых запросов
-        current_time = time.time()
-        if current_time - self.last_request_time < self.min_interval:
-            time.sleep(self.min_interval - (current_time - self.last_request_time))
-        
-        try:
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}"
-            }
-            
-            payload = {
-                "model": "deepseek-chat",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": """Ты - полезный помощник для студентов. 
-                        Объясняй сложные темы простыми словами, используя аналогии и примеры из жизни.
-                        Будь дружелюбным и поддерживающим. Разбивай сложные концепции на простые шаги."""
-                    },
-                    {
-                        "role": "user", 
-                        "content": f"Пожалуйста, объясни следующее простыми словами, как если бы ты объяснял другу: {question}"
-                    }
-                ],
-                "temperature": 0.7,
-                "max_tokens": 2000,
-                "stream": False
-            }
-            
-            response = requests.post(self.base_url, headers=headers, json=payload)
-            response.raise_for_status()
-            
-            result = response.json()
-            answer = result['choices'][0]['message']['content']
-            
-            self.last_request_time = time.time()
-            return answer
-            
-        except requests.exceptions.RequestException as e:
-            return f"Ошибка подключения: {str(e)}"
-        except KeyError as e:
-            return "Ошибка в формате ответа от API"
-        except Exception as e:
-            return f"Произошла ошибка: {str(e)}"
-
-# Создаем экземпляр помощника
-deepseek_helper = DeepSeekHelper()
+ai_helper_instance = AIHelper()
 
 @app.route('/api/ask_ai', methods=['POST'])
 def ask_ai():
@@ -218,14 +169,14 @@ def ask_ai():
         if not question or len(question.strip()) < 3:
             return jsonify({"answer": "Пожалуйста, задайте более конкретный вопрос."})
         
-        # Используем DeepSeek вместо OpenAI
-        answer = deepseek_helper.ask_question(question)
-        
+        answer = ai_helper_instance.ask_question(question)
         return jsonify({"answer": answer})
         
     except Exception as e:
-        print(f"Общая ошибка: {e}")
-        return jsonify({"answer": "Извините, произошла непредвиденная ошибка. Попробуйте еще раз."})
+        return jsonify({"answer": f"Извините, произошла непредвиденная ошибка: {str(e)}"})
+
+# Инициализация при импорте
+init_data()
+
 if __name__ == '__main__':
-    init_data()
     app.run(debug=True, port=5000)

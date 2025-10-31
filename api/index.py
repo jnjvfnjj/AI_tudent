@@ -7,42 +7,49 @@ import time
 
 app = Flask(__name__)
 
-# Конфигурация
+# Конфигурация для Vercel
 api_key = os.environ.get('DEEPSEEK_API_KEY')
 
-# Простое хранение данных
-DATA_FILE = '/tmp/data.json'  # Используем /tmp для Vercel
+# Хранение данных в памяти (для Vercel)
+# В Vercel файловая система read-only, кроме /tmp
+DATA_FILE = '/tmp/data.json'
+
+# Глобальная переменная для хранения данных в памяти
+app_data = {
+    "users": [],
+    "materials": [],
+    "subjects": ["Математика", "Физика", "Программирование", "Английский", "История", "Химия"]
+}
 
 def init_data():
-    if not os.path.exists(DATA_FILE):
-        base_data = {
-            "users": [],
-            "materials": [],
-            "subjects": ["Математика", "Физика", "Программирование", "Английский", "История", "Химия"]
-        }
-        save_data(base_data)
-
-def save_data(data):
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-def load_data():
+    global app_data
     try:
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if "materials" not in data:
-                data["materials"] = []
-            if "subjects" not in data:
-                data["subjects"] = ["Математика", "Физика", "Программирование", "Английский", "История", "Химия"]
-            if "users" not in data:
-                data["users"] = []
-            return data
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {
-            "users": [],
-            "materials": [], 
-            "subjects": ["Математика", "Физика", "Программирование", "Английский", "История", "Химия"]
-        }
+        # Пытаемся загрузить из файла
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                loaded_data = json.load(f)
+                app_data = loaded_data
+    except Exception:
+        # Если ошибка, используем данные по умолчанию
+        pass
+    
+    # Гарантируем наличие всех необходимых полей
+    if "materials" not in app_data:
+        app_data["materials"] = []
+    if "subjects" not in app_data:
+        app_data["subjects"] = ["Математика", "Физика", "Программирование", "Английский", "История", "Химия"]
+    if "users" not in app_data:
+        app_data["users"] = []
+
+def save_data():
+    global app_data
+    try:
+        # Пытаемся сохранить в файл
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(app_data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        # В Vercel /tmp может быть недоступен, просто игнорируем
+        pass
 
 # Маршруты страниц
 @app.route('/')
@@ -51,9 +58,8 @@ def index():
 
 @app.route('/materials')
 def materials():
-    data = load_data()
-    materials_list = data.get("materials", [])
-    subjects_list = data.get("subjects", ["Математика", "Физика", "Программирование", "Английский"])
+    materials_list = app_data.get("materials", [])
+    subjects_list = app_data.get("subjects", ["Математика", "Физика", "Программирование", "Английский"])
     return render_template('materials.html', materials=materials_list, subjects=subjects_list)
 
 @app.route('/ai-helper')
@@ -67,29 +73,26 @@ def profile():
 # API endpoints
 @app.route('/api/materials')
 def get_materials():
-    data = load_data()
-    return jsonify({"materials": data.get("materials", []), "subjects": data.get("subjects", [])})
+    return jsonify({"materials": app_data.get("materials", []), "subjects": app_data.get("subjects", [])})
 
 @app.route('/api/add_material', methods=['POST'])
 def add_material():
-    data = load_data()
     material = {
-        "id": len(data["materials"]) + 1,
+        "id": len(app_data["materials"]) + 1,
         "title": request.json['title'],
         "content": request.json['content'],
         "subject": request.json['subject'],
         "type": request.json['type'],
         "date": datetime.now().strftime("%d.%m.%Y %H:%M")
     }
-    data["materials"].append(material)
-    save_data(data)
+    app_data["materials"].append(material)
+    save_data()
     return jsonify({"status": "success", "material": material})
 
 @app.route('/api/delete_material/<int:material_id>', methods=['DELETE'])
 def delete_material(material_id):
-    data = load_data()
-    data["materials"] = [m for m in data["materials"] if m["id"] != material_id]
-    save_data(data)
+    app_data["materials"] = [m for m in app_data["materials"] if m["id"] != material_id]
+    save_data()
     return jsonify({"status": "success"})
 
 class AIHelper:
@@ -102,8 +105,18 @@ class AIHelper:
         if current_time - self.last_request_time < self.min_interval:
             time.sleep(self.min_interval - (current_time - self.last_request_time))
         
+        # Если API ключ не установлен, возвращаем демо-ответ
+        if not api_key:
+            demo_responses = [
+                f"Отличный вопрос! '{question}' - это очень интересная тема. В обычных условиях я бы объяснил это подробно, но сейчас API ключ не настроен. Для работы с AI-помощником необходимо добавить DEEPSEEK_API_KEY в настройки Vercel.",
+                f"Вопрос '{question}' действительно важен для понимания. Для получения полного ответа необходимо настроить API ключ DeepSeek в переменных окружения Vercel.",
+                f"Я бы с радостью объяснил тему '{question}', но сначала нужно настроить аутентификацию. Добавьте DEEPSEEK_API_KEY в настройки вашего проекта на Vercel.",
+            ]
+            import random
+            return random.choice(demo_responses)
+        
         try:
-            # DeepSeek API вместо OpenAI
+            # DeepSeek API
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}"
@@ -132,7 +145,8 @@ class AIHelper:
             response = requests.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers=headers,
-                json=payload
+                json=payload,
+                timeout=30
             )
             
             if response.status_code == 200:
@@ -141,13 +155,13 @@ class AIHelper:
                 self.last_request_time = time.time()
                 return answer
             else:
-                return f"Ошибка API: {response.status_code} - {response.text}"
+                return f"Ошибка API: {response.status_code}. Пожалуйста, проверьте API ключ и попробуйте снова."
             
         except Exception as e:
-            return f"Произошла ошибка: {str(e)}"
+            return f"Произошла ошибка при подключении: {str(e)}"
 
 # Создаем экземпляр помощника
-ai_helper = AIHelper()
+ai_helper_instance = AIHelper()
 
 @app.route('/api/ask_ai', methods=['POST'])
 def ask_ai():
@@ -157,14 +171,14 @@ def ask_ai():
         if not question or len(question.strip()) < 3:
             return jsonify({"answer": "Пожалуйста, задайте более конкретный вопрос."})
         
-        if not api_key:
-            return jsonify({"answer": "API ключ не настроен. Пожалуйста, проверьте настройки."})
-        
-        answer = ai_helper.ask_question(question)
+        answer = ai_helper_instance.ask_question(question)
         return jsonify({"answer": answer})
         
     except Exception as e:
         return jsonify({"answer": f"Извините, произошла непредвиденная ошибка: {str(e)}"})
 
-# Инициализация при импорте
+# Инициализация при запуске
 init_data()
+
+# Для Vercel нужно экспортировать app как handler
+handler = app
